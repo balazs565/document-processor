@@ -1,7 +1,7 @@
 """
-File conversion tab – DOCX ↔ PDF, with batch support.
+File conversion tab – DOCX ↔ PDF, batch support.
+Layout is scroll-wrapped so adding files never collapses the options.
 """
-
 from __future__ import annotations
 
 import os
@@ -11,12 +11,14 @@ from PyQt6.QtCore import Qt, QThreadPool
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QFileDialog,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -41,73 +43,84 @@ class ConvertTab(QWidget):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
 
-        heading = QLabel("File Conversion")
-        heading.setObjectName("titleLabel")
-        sub = QLabel("Convert between Word (.docx) and PDF formats. Supports batch processing.")
-        sub.setObjectName("subtitleLabel")
-        layout.addWidget(heading)
-        layout.addWidget(sub)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
 
-        # Conversion direction
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 28, 32, 28)
+        layout.setSpacing(18)
+
+        # Heading
+        layout.addWidget(QLabel("File Conversion", objectName="titleLabel"))
+        layout.addWidget(QLabel(
+            "Convert between Word (.docx) and PDF. Supports batch processing.",
+            objectName="subtitleLabel"
+        ))
+
+        # Direction
         dir_group = QGroupBox("Conversion Direction")
         dir_layout = QHBoxLayout(dir_group)
-        self._docx_to_pdf = QRadioButton("Word (.docx) → PDF")
-        self._pdf_to_docx = QRadioButton("PDF → Word (.docx)")
+        dir_layout.setSpacing(24)
+        self._docx_to_pdf = QRadioButton("Word (.docx)  →  PDF")
+        self._pdf_to_docx = QRadioButton("PDF  →  Word (.docx)")
         self._docx_to_pdf.setChecked(True)
         self._docx_to_pdf.toggled.connect(self._on_direction_changed)
-
-        btn_group = QButtonGroup(self)
-        btn_group.addButton(self._docx_to_pdf)
-        btn_group.addButton(self._pdf_to_docx)
-
+        btn_grp = QButtonGroup(self)
+        btn_grp.addButton(self._docx_to_pdf)
+        btn_grp.addButton(self._pdf_to_docx)
         dir_layout.addWidget(self._docx_to_pdf)
         dir_layout.addWidget(self._pdf_to_docx)
         dir_layout.addStretch()
         layout.addWidget(dir_group)
 
-        # Drop zone
+        # Drop zone – fixed height prevents collapse
         self._drop_zone = DropZone(
             "Drop Word (.docx) files here",
             accepted_extensions=[".docx", ".doc"],
         )
+        self._drop_zone.setFixedHeight(120)
         self._drop_zone.files_dropped.connect(self._add_files)
         layout.addWidget(self._drop_zone)
 
-        # File list
+        # File list – constrained height
         files_group = QGroupBox("Files to Convert")
-        files_layout = QVBoxLayout(files_group)
+        fl = QVBoxLayout(files_group)
         self._file_list = FileListWidget(accepted_extensions=[".docx", ".doc"])
-        files_layout.addWidget(self._file_list)
-
+        self._file_list.setMinimumHeight(120)
+        self._file_list.setMaximumHeight(220)
+        fl.addWidget(self._file_list)
         add_btn = QPushButton("Add Files…")
         add_btn.clicked.connect(self._browse_files)
-        files_layout.addWidget(add_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        fl.addWidget(add_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(files_group)
 
         # Output directory
         out_group = QGroupBox("Output")
-        out_layout = QHBoxLayout(out_group)
+        out_row = QHBoxLayout(out_group)
         self._out_label = QLabel("Same folder as source")
-        self._out_label.setStyleSheet("color: #6c7086;")
+        self._out_label.setStyleSheet("color:#9aa0ac;")
         out_browse = QPushButton("Choose Folder…")
         out_browse.clicked.connect(self._browse_output)
-        out_layout.addWidget(QLabel("Save to:"))
-        out_layout.addWidget(self._out_label, 1)
-        out_layout.addWidget(out_browse)
+        out_row.addWidget(QLabel("Save to:"))
+        out_row.addWidget(self._out_label, 1)
+        out_row.addWidget(out_browse)
         layout.addWidget(out_group)
 
         # Convert button
         self._convert_btn = QPushButton("Convert All")
         self._convert_btn.setObjectName("primaryButton")
-        self._convert_btn.setFixedHeight(40)
+        self._convert_btn.setFixedHeight(38)
         self._convert_btn.clicked.connect(self._run_conversion)
         layout.addWidget(self._convert_btn)
 
         layout.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
     # ------------------------------------------------------------------
     # Slots
@@ -128,10 +141,9 @@ class ConvertTab(QWidget):
             self._recent.add(p)
 
     def _browse_files(self) -> None:
-        if self._docx_to_pdf.isChecked():
-            filt = "Word Documents (*.docx *.doc);;All Files (*)"
-        else:
-            filt = "PDF Files (*.pdf);;All Files (*)"
+        filt = ("Word Documents (*.docx *.doc);;All Files (*)"
+                if self._docx_to_pdf.isChecked()
+                else "PDF Files (*.pdf);;All Files (*)")
         paths, _ = QFileDialog.getOpenFileNames(self, "Select Files", "", filt)
         if paths:
             self._add_files(paths)
@@ -147,51 +159,33 @@ class ConvertTab(QWidget):
         if not files:
             QMessageBox.warning(self, "No Files", "Please add files to convert.")
             return
-
         conv_type = "docx_to_pdf" if self._docx_to_pdf.isChecked() else "pdf_to_docx"
-
         dlg = ProgressDialog("Converting Files…", parent=self)
-
-        worker = Worker(
-            batch_convert,
-            files,
-            conv_type,
-            self._output_dir,
-        )
+        worker = Worker(batch_convert, files, conv_type, self._output_dir)
         worker.signals.progress.connect(dlg.set_progress)
         worker.signals.status.connect(dlg.set_status)
         worker.signals.result.connect(self._on_done)
-        worker.signals.error.connect(self._on_error)
+        worker.signals.error.connect(lambda e: (dlg.accept(), self._on_error(e)))
         worker.signals.finished.connect(dlg.accept)
-
         QThreadPool.globalInstance().start(worker)
         dlg.exec()
 
     def _on_done(self, results) -> None:
-        successes = [(i, o) for i, o, e in results if e is None]
-        failures = [(i, e) for i, o, e in results if e is not None]
-        msg = f"Converted {len(successes)} file(s) successfully."
-        if failures:
-            msg += f"\n\n{len(failures)} file(s) failed:\n"
-            msg += "\n".join(f"• {os.path.basename(i)}: {e}" for i, e in failures)
+        ok  = [(i, o) for i, o, e in results if e is None]
+        bad = [(i, e) for i, o, e in results if e is not None]
+        msg = f"✓  {len(ok)} file(s) converted successfully."
+        if bad:
+            msg += f"\n\n✗  {len(bad)} failed:\n"
+            msg += "\n".join(f"  • {os.path.basename(i)}: {e}" for i, e in bad)
         QMessageBox.information(self, "Done", msg)
 
     def _on_error(self, error_text: str) -> None:
         QMessageBox.critical(self, "Error", f"Conversion failed:\n\n{error_text}")
 
-    # ------------------------------------------------------------------
-    # External API (called by main window after navigation)
-    # ------------------------------------------------------------------
-
     def preload_files(self, paths: List[str]) -> None:
-        """Pre-load files into the list (e.g. after drag-drop from home tab)."""
         from utils.file_utils import is_pdf, is_docx
-        has_pdf = any(is_pdf(p) for p in paths)
-        has_docx = any(is_docx(p) for p in paths)
-
-        if has_pdf and not has_docx:
+        if any(is_pdf(p) for p in paths) and not any(is_docx(p) for p in paths):
             self._pdf_to_docx.setChecked(True)
-        elif has_docx and not has_pdf:
+        elif any(is_docx(p) for p in paths):
             self._docx_to_pdf.setChecked(True)
-
         self._add_files(paths)

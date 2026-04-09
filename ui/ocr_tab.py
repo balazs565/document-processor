@@ -1,7 +1,7 @@
 """
 OCR tab – extract text from scanned PDFs and images.
+Layout is scroll-wrapped so file additions don't collapse options.
 """
-
 from __future__ import annotations
 
 import os
@@ -12,11 +12,13 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -42,106 +44,112 @@ class OCRTab(QWidget):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
 
-        heading = QLabel("OCR – Text Recognition")
-        heading.setObjectName("titleLabel")
-        sub = QLabel(
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(32, 28, 32, 28)
+        layout.setSpacing(18)
+
+        layout.addWidget(QLabel("OCR – Text Recognition", objectName="titleLabel"))
+        layout.addWidget(QLabel(
             "Extract text from scanned PDFs or images. "
-            "Supports Romanian, Hungarian and more."
-        )
-        sub.setObjectName("subtitleLabel")
-        sub.setWordWrap(True)
-        layout.addWidget(heading)
-        layout.addWidget(sub)
+            "Romanian and Hungarian language packs supported.",
+            objectName="subtitleLabel"
+        ))
 
-        # Language selection
+        # Language settings
         lang_group = QGroupBox("Language Settings")
-        lang_layout = QVBoxLayout(lang_group)
+        lg = QVBoxLayout(lang_group)
+        lg.setSpacing(10)
 
-        primary_row = QHBoxLayout()
-        primary_row.addWidget(QLabel("Primary language:"))
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("Primary language:"))
         self._lang_combo = QComboBox()
         for display, code in config.OCR_LANGUAGES.items():
             self._lang_combo.addItem(display, code)
-        # Default: Romanian
         self._lang_combo.setCurrentText("Romanian")
-        primary_row.addWidget(self._lang_combo)
-        primary_row.addStretch()
+        row1.addWidget(self._lang_combo)
+        row1.addStretch()
 
-        secondary_row = QHBoxLayout()
-        secondary_row.addWidget(QLabel("Also include English:"))
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("Also include English:"))
         self._eng_check = QCheckBox()
-        self._eng_check.setChecked(False)
-        secondary_row.addWidget(self._eng_check)
-        secondary_row.addStretch()
+        row2.addWidget(self._eng_check)
+        row2.addStretch()
 
-        dpi_row = QHBoxLayout()
-        dpi_row.addWidget(QLabel("Scan DPI (higher = better quality, slower):"))
+        row3 = QHBoxLayout()
+        row3.addWidget(QLabel("Scan resolution (DPI):"))
         self._dpi_combo = QComboBox()
         for dpi in ["150", "200", "300", "400", "600"]:
             self._dpi_combo.addItem(f"{dpi} DPI", int(dpi))
         self._dpi_combo.setCurrentText("300 DPI")
-        dpi_row.addWidget(self._dpi_combo)
-        dpi_row.addStretch()
+        row3.addWidget(self._dpi_combo)
+        row3.addStretch()
 
-        lang_layout.addLayout(primary_row)
-        lang_layout.addLayout(secondary_row)
-        lang_layout.addLayout(dpi_row)
+        lg.addLayout(row1)
+        lg.addLayout(row2)
+        lg.addLayout(row3)
         layout.addWidget(lang_group)
 
-        # Drop zone
+        # Drop zone – fixed height
         self._drop_zone = DropZone(
             "Drop PDF or image files here",
             accepted_extensions=[".pdf", ".png", ".jpg", ".jpeg", ".tiff", ".bmp"],
         )
+        self._drop_zone.setFixedHeight(120)
         self._drop_zone.files_dropped.connect(self._add_files)
         layout.addWidget(self._drop_zone)
 
-        # File list
-        files_group = QGroupBox("Files to OCR")
-        files_layout = QVBoxLayout(files_group)
+        # File list – constrained
+        files_group = QGroupBox("Files to Process")
+        fl = QVBoxLayout(files_group)
         self._file_list = FileListWidget(
             accepted_extensions=[".pdf", ".png", ".jpg", ".jpeg", ".tiff", ".bmp"]
         )
-        files_layout.addWidget(self._file_list)
-
+        self._file_list.setMinimumHeight(100)
+        self._file_list.setMaximumHeight(200)
+        fl.addWidget(self._file_list)
         add_btn = QPushButton("Add Files…")
         add_btn.clicked.connect(self._browse_files)
-        files_layout.addWidget(add_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        fl.addWidget(add_btn, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(files_group)
 
         # Output
         out_group = QGroupBox("Output")
-        out_layout = QHBoxLayout(out_group)
+        out_row = QHBoxLayout(out_group)
         self._out_label = QLabel("Same folder as source")
-        self._out_label.setStyleSheet("color: #6c7086;")
+        self._out_label.setStyleSheet("color:#9aa0ac;")
         out_browse = QPushButton("Choose Folder…")
         out_browse.clicked.connect(self._browse_output)
-        out_layout.addWidget(QLabel("Save to:"))
-        out_layout.addWidget(self._out_label, 1)
-        out_layout.addWidget(out_browse)
+        out_row.addWidget(QLabel("Save to:"))
+        out_row.addWidget(self._out_label, 1)
+        out_row.addWidget(out_browse)
         layout.addWidget(out_group)
 
         # Run button
         self._run_btn = QPushButton("Run OCR")
         self._run_btn.setObjectName("primaryButton")
-        self._run_btn.setFixedHeight(40)
+        self._run_btn.setFixedHeight(38)
         self._run_btn.clicked.connect(self._run_ocr)
         layout.addWidget(self._run_btn)
 
-        # Note
         note = QLabel(
-            "⚠️  Tesseract OCR must be installed with the ron and hun language packs.\n"
-            "    See README for installation instructions."
+            "⚠  Tesseract OCR must be installed with ron and hun language packs. "
+            "See README for installation instructions."
         )
-        note.setStyleSheet("color: #f9e2af; font-size: 11px;")
+        note.setStyleSheet("color:#d7ba7d;font-size:11px;")
         note.setWordWrap(True)
         layout.addWidget(note)
 
         layout.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
     # ------------------------------------------------------------------
     # Slots
@@ -153,8 +161,10 @@ class OCRTab(QWidget):
             self._recent.add(p)
 
     def _browse_files(self) -> None:
-        filt = "PDF & Images (*.pdf *.png *.jpg *.jpeg *.tiff *.bmp);;All Files (*)"
-        paths, _ = QFileDialog.getOpenFileNames(self, "Select Files", "", filt)
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Select Files", "",
+            "PDF & Images (*.pdf *.png *.jpg *.jpeg *.tiff *.bmp);;All Files (*)",
+        )
         if paths:
             self._add_files(paths)
 
@@ -177,30 +187,23 @@ class OCRTab(QWidget):
             return
 
         lang = self._build_lang_string()
-        dpi = self._dpi_combo.currentData()
-
+        dpi  = self._dpi_combo.currentData()
         successes: List[str] = []
-        errors: List[str] = []
+        errors:    List[str] = []
 
         dlg = ProgressDialog("Running OCR…", parent=self)
 
         def run_all(progress_callback, status_callback):
             total = len(files)
-            for idx, file_path in enumerate(files):
+            for idx, fp in enumerate(files):
+                out = None
                 if self._output_dir:
-                    stem = os.path.splitext(os.path.basename(file_path))[0]
-                    out = os.path.join(self._output_dir, f"{stem}_ocr.docx")
-                else:
-                    out = None
+                    stem = os.path.splitext(os.path.basename(fp))[0]
+                    out  = os.path.join(self._output_dir, f"{stem}_ocr.docx")
                 try:
-                    status_callback(
-                        f"OCR: {os.path.basename(file_path)} ({idx + 1}/{total})…"
-                    )
+                    status_callback(f"OCR: {os.path.basename(fp)} ({idx+1}/{total})…")
                     result = perform_ocr(
-                        file_path,
-                        language=lang,
-                        output_path=out,
-                        dpi=dpi,
+                        fp, language=lang, output_path=out, dpi=dpi,
                         progress_callback=lambda p: progress_callback(
                             int(((idx + p / 100) / total) * 100)
                         ),
@@ -208,31 +211,26 @@ class OCRTab(QWidget):
                     )
                     successes.append(result)
                 except Exception as exc:
-                    errors.append(f"{os.path.basename(file_path)}: {exc}")
+                    errors.append(f"{os.path.basename(fp)}: {exc}")
             return (successes, errors)
 
         worker = Worker(run_all)
         worker.signals.progress.connect(dlg.set_progress)
         worker.signals.status.connect(dlg.set_status)
         worker.signals.result.connect(lambda r: self._on_done(r[0], r[1]))
-        worker.signals.error.connect(self._on_error)
+        worker.signals.error.connect(lambda e: (dlg.accept(), self._on_error(e)))
         worker.signals.finished.connect(dlg.accept)
-
         QThreadPool.globalInstance().start(worker)
         dlg.exec()
 
-    def _on_done(self, successes: List[str], errors: List[str]) -> None:
-        msg = f"OCR completed for {len(successes)} file(s)."
+    def _on_done(self, successes, errors) -> None:
+        msg = f"✓  OCR completed for {len(successes)} file(s)."
         if errors:
-            msg += f"\n\n{len(errors)} error(s):\n" + "\n".join(f"• {e}" for e in errors)
+            msg += f"\n\n✗  {len(errors)} error(s):\n" + "\n".join(f"  • {e}" for e in errors)
         QMessageBox.information(self, "Done", msg)
 
     def _on_error(self, error_text: str) -> None:
         QMessageBox.critical(self, "Error", f"OCR failed:\n\n{error_text}")
-
-    # ------------------------------------------------------------------
-    # External API
-    # ------------------------------------------------------------------
 
     def preload_files(self, paths: List[str]) -> None:
         self._add_files(paths)
