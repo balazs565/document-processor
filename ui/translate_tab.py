@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import List
 
 from PyQt6.QtCore import Qt, QThreadPool
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -174,16 +176,41 @@ class TranslateTab(QWidget):
 
         # ── Export options ────────────────────────────────────────────
         export_group = QGroupBox("Export")
-        exg = QHBoxLayout(export_group)
-        self._export_docx = QRadioButton("DOCX  (default)")
-        self._export_pdf  = QRadioButton("DOCX + PDF")
+        exg = QVBoxLayout(export_group)
+
+        format_row = QHBoxLayout()
+        self._export_docx      = QRadioButton("DOCX  (default)")
+        self._export_pdf       = QRadioButton("DOCX + PDF")
+        self._export_pdf_inplace = QRadioButton("Translated PDF  (keep original layout)")
         self._export_docx.setChecked(True)
         btn_grp = QButtonGroup(self)
         btn_grp.addButton(self._export_docx)
         btn_grp.addButton(self._export_pdf)
-        exg.addWidget(self._export_docx)
-        exg.addWidget(self._export_pdf)
-        exg.addStretch()
+        btn_grp.addButton(self._export_pdf_inplace)
+        format_row.addWidget(self._export_docx)
+        format_row.addWidget(self._export_pdf)
+        format_row.addWidget(self._export_pdf_inplace)
+        format_row.addStretch()
+        exg.addLayout(format_row)
+
+        # Background colour picker – only relevant for in-place mode
+        self._bg_color_row = QWidget()
+        bg_row_layout = QHBoxLayout(self._bg_color_row)
+        bg_row_layout.setContentsMargins(0, 0, 0, 0)
+        bg_row_layout.addWidget(QLabel("Text background colour:"))
+        self._bg_color_btn = QPushButton()
+        self._bg_color_btn.setFixedSize(60, 22)
+        self._bg_color_btn.setToolTip("Colour used to erase original text before placing the translation")
+        self._bg_color: QColor = QColor(255, 255, 255)
+        self._update_bg_btn_color()
+        self._bg_color_btn.clicked.connect(self._pick_bg_color)
+        bg_row_layout.addWidget(self._bg_color_btn)
+        bg_row_layout.addWidget(QLabel("(use white for light PDFs, match page background for others)"))
+        bg_row_layout.addStretch()
+        self._bg_color_row.setVisible(False)
+        exg.addWidget(self._bg_color_row)
+
+        self._export_pdf_inplace.toggled.connect(self._on_export_mode_changed)
         layout.addWidget(export_group)
 
         # ── Translate button ──────────────────────────────────────────
@@ -257,6 +284,30 @@ class TranslateTab(QWidget):
         config.DEEPL_API_KEY          = self._dl_key.text().strip()
 
     # ------------------------------------------------------------------
+    # Export mode / background colour
+    # ------------------------------------------------------------------
+
+    def _on_export_mode_changed(self, checked: bool) -> None:
+        """Show/hide the background colour picker for in-place PDF mode."""
+        self._bg_color_row.setVisible(self._export_pdf_inplace.isChecked())
+
+    def _pick_bg_color(self) -> None:
+        """Open a colour dialog and update the background swatch button."""
+        color = QColorDialog.getColor(self._bg_color, self, "Pick Background Colour")
+        if color.isValid():
+            self._bg_color = color
+            self._update_bg_btn_color()
+
+    def _update_bg_btn_color(self) -> None:
+        """Paint the swatch button to show the currently selected colour."""
+        hex_col = self._bg_color.name()
+        border  = "#5c6370"
+        self._bg_color_btn.setStyleSheet(
+            f"QPushButton{{background:{hex_col};border:1px solid {border};"
+            f"border-radius:3px;}}"
+        )
+
+    # ------------------------------------------------------------------
     # File picker
     # ------------------------------------------------------------------
 
@@ -290,8 +341,13 @@ class TranslateTab(QWidget):
             return
 
         self._apply_provider_settings()
-        provider   = self._prov_combo.currentData()
-        export_pdf = self._export_pdf.isChecked()
+        provider         = self._prov_combo.currentData()
+        export_pdf       = self._export_pdf.isChecked()
+        keep_pdf_format  = self._export_pdf_inplace.isChecked()
+
+        # Build bg_color tuple for in-place mode
+        qc = self._bg_color
+        bg_color = (qc.redF(), qc.greenF(), qc.blueF())
 
         self._log.clear()
         self._progress_bar.setValue(0)
@@ -299,7 +355,8 @@ class TranslateTab(QWidget):
         self._translate_btn.setEnabled(False)
         self._append_log(f"Starting translation: {Path(path).name}")
         self._append_log(f"Provider: {self._prov_combo.currentText()}")
-        self._append_log(f"Direction: {src} → {tgt}\n")
+        mode_label = "keep layout PDF" if keep_pdf_format else ("DOCX+PDF" if export_pdf else "DOCX")
+        self._append_log(f"Direction: {src} → {tgt}   Mode: {mode_label}\n")
 
         worker = Worker(
             translate_document,
@@ -308,6 +365,8 @@ class TranslateTab(QWidget):
             source_lang=src,
             provider=provider,
             export_pdf=export_pdf,
+            keep_pdf_format=keep_pdf_format,
+            bg_color=bg_color,
         )
         worker.signals.progress.connect(self._on_progress)
         worker.signals.status.connect(self._append_log)

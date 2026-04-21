@@ -53,6 +53,8 @@ def translate_document(
     output_path: Optional[str] = None,
     provider: str = config.TRANSLATION_PROVIDER,
     export_pdf: bool = False,
+    keep_pdf_format: bool = False,
+    bg_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
     ocr_dpi: int = 300,
     progress_callback: ProgressCB = None,
     status_callback:   StatusCB   = None,
@@ -63,20 +65,44 @@ def translate_document(
 
     Parameters
     ----------
-    input_path   : Source document (PDF or DOCX).
-    target_lang  : Target language code: "en", "ro", "hu".
-    source_lang  : Source language code or "auto".
-    output_path  : Destination DOCX path.  Auto-derived if None.
-    provider     : Translation backend – "libretranslate", "deepl", "marianmt".
-    export_pdf   : If True, also convert the output DOCX to PDF via docx2pdf.
-    ocr_dpi      : DPI used when OCR-ing scanned PDFs.
+    input_path       : Source document (PDF or DOCX).
+    target_lang      : Target language code: "en", "ro", "hu".
+    source_lang      : Source language code or "auto".
+    output_path      : Destination path.  Auto-derived if None.
+    provider         : Translation backend – "libretranslate", "deepl", "marianmt".
+    export_pdf       : If True, also convert the output DOCX to PDF via docx2pdf.
+    keep_pdf_format  : If True (and source is PDF), use in-place layout-preserving
+                       translation – images and backgrounds stay untouched.
+    bg_color         : Fill colour for redacted text areas when keep_pdf_format=True.
+                       RGB tuple of floats 0-1, default white (1,1,1).
+    ocr_dpi          : DPI used when OCR-ing scanned PDFs.
 
-    Returns the output file path (DOCX, or PDF if export_pdf=True).
+    Returns the output file path.
     """
     _log(status_callback, "Analysing document…")
 
     ext = Path(input_path).suffix.lower()
     translator = Translator(provider=provider)
+
+    # ── In-place PDF layout-preserving path ──────────────────────────────
+    if keep_pdf_format and ext == ".pdf":
+        if output_path is None:
+            suffix = f"_{target_lang}_translated"
+            output_path = unique_path(
+                build_output_path(input_path, None, ".pdf", suffix)
+            )
+        from core.pdf_inplace_translator import translate_pdf_keeping_layout
+        return translate_pdf_keeping_layout(
+            input_path,
+            output_path,
+            translator,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            bg_color=bg_color,
+            progress_callback=progress_callback,
+            status_callback=status_callback,
+        )
+    # ─────────────────────────────────────────────────────────────────────
 
     if output_path is None:
         suffix = f"_{target_lang}"
