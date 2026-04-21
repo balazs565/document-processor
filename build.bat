@@ -23,6 +23,23 @@ pip install pyinstaller --quiet
 
 :: ── Step 3: Build with PyInstaller ──────────────────────────────────
 echo [3/4] Building executable with PyInstaller...
+
+:: Kill any running instance so Windows releases file locks on dist\
+echo     Stopping any running PDFEditor instance...
+taskkill /F /IM PDFEditor.exe >nul 2>&1
+
+:: Manually remove the old dist folder to avoid PermissionError 5
+if exist "dist\PDFEditor" (
+    echo     Removing old dist\PDFEditor...
+    rd /s /q "dist\PDFEditor"
+    if exist "dist\PDFEditor" (
+        echo  ERROR: Could not delete dist\PDFEditor – close any file explorer
+        echo         windows pointing to that folder and try again.
+        pause
+        exit /b 1
+    )
+)
+
 pyinstaller DocumentProcessor.spec --noconfirm --clean
 
 if errorlevel 1 (
