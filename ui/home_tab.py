@@ -205,12 +205,14 @@ class HomeTab(QWidget):
                 ("✂️", "Split PDF",          "Divide by page range",                        "pdf_tools"),
                 ("🗜️", "Compress PDF",       "Reduce file size with adjustable quality",    "pdf_tools"),
                 ("🔒", "Protect PDF",        "Add password encryption",                     "pdf_tools"),
+                ("🌍", "Translate PDF",      "Translate to Romanian, Hungarian or English",  "translate"),
             ]
         elif ftype == "docx":
             cards = [
                 ("🔄", "Convert to PDF",   "Export as a PDF document",                    "convert"),
                 ("🖼️", "Extract Images",   "Save all embedded images",                    "docx_tools"),
                 ("📸", "Convert to Images","Render each page as a PNG",                   "docx_tools"),
+                ("🌍", "Translate Document","Translate to another language",                "translate"),
             ]
         elif ftype == "image":
             cards = [("🔍", "OCR – Extract Text", "Run OCR on this image", "ocr")]

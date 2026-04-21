@@ -53,3 +53,18 @@ TESSERACT_PATHS = [
         os.environ.get("USERNAME", "")
     ),
 ]
+
+# ── Translation ────────────────────────────────────────────────────────────
+# Provider: "libretranslate" | "deepl" | "marianmt"
+TRANSLATION_PROVIDER = "libretranslate"
+
+# LibreTranslate – default to localhost (no key needed for self-hosted)
+# Public API: https://libretranslate.com  (API key required)
+LIBRETRANSLATE_URL     = "http://localhost:5000"
+LIBRETRANSLATE_API_KEY = ""
+
+# DeepL – leave blank to disable
+DEEPL_API_KEY = ""
+
+# MarianMT offline model cache directory
+MARIANMT_CACHE_DIR = os.path.join(CONFIG_DIR, "models")

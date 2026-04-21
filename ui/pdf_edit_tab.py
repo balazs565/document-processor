@@ -258,6 +258,9 @@ class PDFEditTab(QWidget):
         self._canvas.point_clicked.connect(self._on_point_click)
         self._canvas.rect_selected.connect(self._on_rect_select)
 
+        # Set default tool now that _canvas exists
+        self._set_tool("note")
+
         # Empty state label
         self._empty_lbl = QLabel("Open a PDF to start editing")
         self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -354,9 +357,6 @@ class PDFEditTab(QWidget):
         layout.addWidget(erase_btn)
 
         layout.addStretch()
-
-        # Set default tool
-        self._set_tool("note")
         return panel
 
     # ------------------------------------------------------------------

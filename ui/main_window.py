@@ -29,6 +29,7 @@ from ui.ocr_tab import OCRTab
 from ui.pdf_tools_tab import PDFToolsTab
 from ui.docx_tools_tab import DocxToolsTab
 from ui.pdf_edit_tab import PDFEditTab
+from ui.translate_tab import TranslateTab
 from utils.recent_files import RecentFiles
 
 
@@ -165,9 +166,11 @@ class MainWindow(QMainWindow):
         self._pdf_tools_tab  = PDFToolsTab(self._recent)
         self._pdf_edit_tab   = PDFEditTab(self._recent)
         self._docx_tools_tab = DocxToolsTab(self._recent)
+        self._translate_tab  = TranslateTab(self._recent)
 
         for tab in (self._home_tab, self._convert_tab, self._ocr_tab,
-                    self._pdf_tools_tab, self._pdf_edit_tab, self._docx_tools_tab):
+                    self._pdf_tools_tab, self._pdf_edit_tab,
+                    self._docx_tools_tab, self._translate_tab):
             self._stack.addWidget(tab)
 
         self._home_tab.navigate_to.connect(self._navigate_to)
@@ -221,6 +224,8 @@ class MainWindow(QMainWindow):
             ("✏️", "PDF Edit",   4),
             (None, "DOCUMENTS", None),
             ("📝", "DOCX Tools", 5),
+            (None, "TRANSLATION", None),
+            ("🌍", "Translate",  6),
         ]
 
         self._nav_buttons: list[NavButton] = []
@@ -257,13 +262,13 @@ class MainWindow(QMainWindow):
         for i, btn in enumerate(self._nav_buttons):
             btn.setChecked(i == index)
         self._stack.setCurrentIndex(index)
-        names = ["Home", "Convert", "OCR", "PDF Tools", "PDF Edit", "DOCX Tools"]
+        names = ["Home", "Convert", "OCR", "PDF Tools", "PDF Edit", "DOCX Tools", "Translate"]
         self._status.showMessage(names[index] if index < len(names) else "")
 
     def _navigate_to(self, tab_key: str, files: list) -> None:
         key_map = {
             "home": 0, "convert": 1, "ocr": 2,
-            "pdf_tools": 3, "pdf_edit": 4, "docx_tools": 5,
+            "pdf_tools": 3, "pdf_edit": 4, "docx_tools": 5, "translate": 6,
         }
         idx = key_map.get(tab_key, 0)
         self._switch_tab(idx)
